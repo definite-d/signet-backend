@@ -1,9 +1,10 @@
+from io import BytesIO
+from typing import Literal
+from xml.etree.ElementTree import ElementTree
+
+from pdf417gen import encode, render_image, render_svg
 from PIL.Image import Image
 from pydantic import validate_call
-from io import BytesIO
-from xml.etree.ElementTree import ElementTree
-from typing import Literal
-from pdf417gen import encode, render_image, render_svg
 
 
 @validate_call()

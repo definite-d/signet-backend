@@ -1,8 +1,7 @@
-from sqlalchemy import select, update, delete
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import NoResultFound
 
-from .db import Fintech
-from .db import get_session
+from .db import Fintech, get_session
 
 
 class FintechRepository:

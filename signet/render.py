@@ -1,5 +1,6 @@
-from jinja2 import Template
 import re
+
+from jinja2 import Template
 
 ZERO_WIDTH_START = "\u200b"  # Zero-width space
 ZERO_WIDTH_END = "\u200c"  # Zero-width non-joiner
