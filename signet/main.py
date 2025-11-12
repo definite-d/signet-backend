@@ -9,7 +9,15 @@ from .qr import generate_qr_code
 from .render import render_with_positions
 from .repo import FintechRepository
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    StandaloneDocs(_app)
+    await init_db()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 class FintechOnboardingRequest(BaseModel):
