@@ -100,8 +100,3 @@ async def get_fintech_generation(
 
     # Export the barcode (SVG or PNG) with the logomark
     return code
-
-
-@app.get("/fintech/generation/transaction")
-async def get_fintech_transaction(file: UploadFile):
-    return {"file": file}
