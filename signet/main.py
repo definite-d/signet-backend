@@ -1,9 +1,12 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from fastapi_standalone_docs import StandaloneDocs
+from pydantic import BaseModel, Field
+from contextlib import asynccontextmanager
 
+from .db import init_db
 from .crypt import get_private_key, sign
 from .qr import generate_qr_code
 from .render import render_with_positions
