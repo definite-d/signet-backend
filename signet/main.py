@@ -30,7 +30,13 @@ class FintechOnboardingRequest(BaseModel):
 
 
 class FintechGenerationRequest(BaseModel):
-    api_key: str
+    api_key: Annotated[
+        str,
+        Field(
+            pattern=rf"sgnt-fak-[a-zA-Z0-9]{{{settings.API_KEY_LENGTH}}}",
+            title="API key",
+        ),
+    ]
     sender_account: int
     sender_bank: str
     receiver_account: int
