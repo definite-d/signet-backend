@@ -33,7 +33,7 @@ class FintechGenerationRequest(BaseModel):
     receiver_account: int
     receiver_bank: str
     receiver_name: str
-    amount: int
+    amount: Annotated[float, Field(..., gt=0)]
     time: datetime
     transaction_reference: str
     format: Literal["svg", "png", "jpg", "webp"]
