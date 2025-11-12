@@ -45,7 +45,9 @@ async def root():
 
 
 @app.post("/fintech/onboarding")
-async def fintech_onboarding(data: FintechOnboardingRequest):
+async def fintech_onboarding(
+    data: FintechOnboardingRequest, repo: FintechRepository = Depends()
+):
     # Take the data and create a new fintech entry in the DB
     # Take the receipt and run it through an OCR model to get the text. Then through an ML model to turn that into the template.
     return {"name": data.name, "email": data.email, "file": data.file}
