@@ -5,7 +5,9 @@ from fastapi import Depends, FastAPI, UploadFile, HTTPException, status
 from pydantic import BaseModel
 
 from .repo import FintechRepository
-from .crypt import sign
+from .crypt import sign, get_private_key
+from .qr import generate_qr_code
+from .render import render_with_positions
 
 app = FastAPI()
 
@@ -52,12 +54,9 @@ async def get_fintech_generation(
         )
     # TODO: Ensure the fintech has the right permissions
 
-    # Get the template
-    template_text = fintech.template
-    template = Template(template_text)
-
-    # Populate the template with the data
-    expected_ocr_text = template.render(
+    # Render and record variable positions
+    rendered_text, positions = render_with_positions(
+        fintech.template,
         sender_account=data.sender_account,
         sender_bank=data.sender_bank,
         receiver_account=data.receiver_account,
@@ -66,20 +65,30 @@ async def get_fintech_generation(
         amount=data.amount,
         time=data.time,
         transaction_reference=data.transaction_reference,
-    ).encode()
+    )
 
-    # Sign the filled in template text
-    private_key = b""
-    signature = sign(private_key, expected_ocr_text)
+    expected_ocr_text = rendered_text.encode()
 
-    # Identify the key indices for the fintech.
+    # Sign the filled-in template text
+    signature = sign(get_private_key(), expected_ocr_text)
 
-    # Add the key indices to the end of the signature payload
+    # Identify key indices for the fintech
+    key_indices = {
+        "receiver_bank": positions.get("receiver_bank"),
+        "receiver_account": positions.get("receiver_account"),
+    }
 
-    # Generate the barcode from the payload.
+    # Append indices to signature payload
+    payload = {
+        "signature": signature,
+        "indices": key_indices,
+    }
 
-    # Export the barcode as SVG or PNG, with the logomark
-    return data
+    # Generate barcode from payload
+    code = generate_qr_code(payload)
+
+    # Export the barcode (SVG or PNG) with the logomark
+    return code
 
 
 @app.get("/fintech/generation/transaction")
