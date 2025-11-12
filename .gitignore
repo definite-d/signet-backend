@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# IDE files
+.vscode/*
+
 # Do not commit
 *.env
 *.pem
+*.db
