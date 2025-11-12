@@ -90,3 +90,11 @@ def get_private_key() -> Ed25519PrivateKey:
 def get_public_key() -> Ed25519PublicKey:
     with settings.PUBLIC_KEY_PEM.open("rb") as f:
         return load_public_key_from_pem(f.read())
+
+
+if __name__ == "__main__":
+    priv, pub = generate_keypair()
+    with open("priv.pem", "wb") as f:
+        f.write(private_key_to_pem(priv))
+    with open("pub.pem", "wb") as f:
+        f.write(public_key_to_pem(pub))
