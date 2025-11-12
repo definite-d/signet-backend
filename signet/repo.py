@@ -1,10 +1,16 @@
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import NoResultFound
+from secrets import token_hex
 
 from .db import Fintech, get_session
+from .settings import settings
 
 
 class FintechRepository:
+    @staticmethod
+    def _create_api_key():
+        return f"sgnt_{token_hex(settings.API_KEY_LENGTH)}"
+
     async def get_fintech(self, api_key: str) -> Fintech | None:
         async with get_session() as session:
             result = await session.execute(
@@ -46,3 +52,6 @@ class FintechRepository:
             await session.commit()
             return True
 
+
+if __name__ == "__main__":
+    print(FintechRepository._create_api_key())

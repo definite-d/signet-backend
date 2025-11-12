@@ -10,6 +10,7 @@ load_dotenv()
 class Settings(BaseSettings):
     PRIVATE_KEY_PEM: Annotated[Path, str]
     PUBLIC_KEY_PEM: Annotated[Path, str]
+    API_KEY_LENGTH: Annotated[int, str] = 24
 
     class Config:
         env_file = ".env"
