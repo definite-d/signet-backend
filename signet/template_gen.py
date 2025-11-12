@@ -1,22 +1,23 @@
 from pathlib import Path
 from pdf2image import convert_from_path
 from PIL import Image, ImageEnhance, ImageFilter
-from PIL import Image
 import pytesseract
 import openai
-import os
+
+from .settings import settings
 
 # OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = settings.OPENAI_API_KEY.get_secret_value()
 
-# open image or convert pdf to image 
+# open image or convert pdf to image
 
-def image_from_file(file_path: str) -> Image.Image:
+
+def image_from_file(file_path) -> Image.Image:
     """
     Opens an image or converts the first page of a PDF to an image.
     """
     ext = Path(file_path).suffix.lower()
-    
+
     if ext == ".pdf":
         pages = convert_from_path(file_path, dpi=200, fmt="png")
         if not pages:
@@ -25,7 +26,9 @@ def image_from_file(file_path: str) -> Image.Image:
     else:
         return Image.open(file_path).convert("RGB")
 
+
 # image preprocessing
+
 
 def preprocess_image(img: Image.Image) -> Image.Image:
     # Convert to grayscale
@@ -40,8 +43,9 @@ def preprocess_image(img: Image.Image) -> Image.Image:
     w, h = img.size
     if max(w, h) < max_dim:
         scale = max_dim / max(w, h)
-        img = img.resize((int(w*scale), int(h*scale)), Image.Resampling.LANCZOS)
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
     return img
+
 
 # Run ocr on image
 def ocr_extract_text(file_path: str) -> str:
@@ -50,7 +54,7 @@ def ocr_extract_text(file_path: str) -> str:
     """
     img = image_from_file(file_path)
     img = preprocess_image(img)
-    custom_config = r'--oem 3'
+    custom_config = r"--oem 3"
     text = pytesseract.image_to_string(img, config=custom_config)
     return text
 
@@ -71,45 +75,49 @@ You are an intelligent OCR assistant.
 Input text:
 {ocr_text}
 
-Output the text with placeholders for dynamic values:
+Output the text with Jinja2 placeholders for dynamic values:
 
-- {{sender_name}}
-- {{sender_account}}
-- {{sender_bank}}
-- {{receiver_name}}
-- {{receiver_account}}
-- {{receiver_bank}}
-- {{amount}}
-- {{amount_in_words}}
-- {{transaction_type}}
-- {{date}}
-- {{timestamp}}
-- {{timezone}}
-- {{transaction_reference}}
-- {{session_id}}
-- {{pos_transfer}}
+- {{{{ sender_name  }}}}
+- {{{{ sender_account  }}}}
+- {{{{ sender_bank  }}}}
+- {{{{ receiver_name  }}}}
+- {{{{ receiver_account  }}}}
+- {{{{ receiver_bank  }}}}
+- {{{{ amount  }}}}
+- {{{{ amount_in_words  }}}}
+- {{{{ transaction_type  }}}}
+- {{{{ date  }}}}
+- {{{{ timestamp  }}}}
+- {{{{ timezone  }}}}
+- {{{{ transaction_reference  }}}}
+- {{{{ session_id  }}}}
+- {{{{ pos_transfer  }}}}
 
 Rules:
 1. Replace only dynamic values, not labels.
 2. Keep all static text, spacing, and line order exactly the same.
 3. Output only the rewritten text with placeholders, nothing else.
 """
-
-    response = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        max_tokens=1000,
-    )
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=1000,
+        )
+    except openai.APIError:
+        raise EnvironmentError("OpenAI's API is currently unreachable")
 
     try:
-        return response.choices[0].message.content
+        r = response.choices[0].message.content
+        r = r.strip("```")
+        return r
     except (KeyError, IndexError):
-        return "Failed to generate template details."
+        raise ValueError("Failed to generate template details")
 
 
 # --- Example usage ---
 if __name__ == "__main__":
-    result = generate_template("test.pdf")
+    from clipboard import copy
 
-    print(result)
+    copy(generate_template("test.pdf"))
