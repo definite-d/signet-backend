@@ -45,3 +45,4 @@ class FintechRepository:
             await session.delete(fintech)
             await session.commit()
             return True
+
