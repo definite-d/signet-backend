@@ -3,6 +3,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 from cryptography.hazmat.primitives import serialization
+from functools import lru_cache
+from .settings import settings
 
 
 def generate_keypair() -> tuple[Ed25519PrivateKey, Ed25519PublicKey]:
@@ -74,3 +76,9 @@ def load_public_key_from_pem(pem_data: bytes) -> Ed25519PublicKey:
     Load a public key from PEM.
     """
     return serialization.load_pem_public_key(pem_data)
+
+
+@lru_cache(1)
+def get_private_key():
+    with settings.PRIVATE_KEY_PEM.open("rb") as f:
+        return load_private_key_from_pem(f.read())
