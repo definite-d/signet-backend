@@ -1,0 +1,48 @@
+from sqlalchemy import select, update, delete
+from sqlalchemy.exc import NoResultFound
+
+from .db import Fintech
+from .db import get_session
+
+
+class FintechRepository:
+    async def get_fintech(self, api_key: str) -> Fintech | None:
+        async with get_session() as session:
+            result = await session.execute(
+                select(Fintech).where(Fintech.api_key == api_key)
+            )
+            return result.scalar_one_or_none()
+
+    async def create_fintech(self, data: dict) -> Fintech:
+        async with get_session() as session:
+            fintech = Fintech(**data)
+            session.add(fintech)
+            await session.commit()
+            await session.refresh(fintech)
+            return fintech
+
+    async def update_fintech(self, api_key: str, data: dict) -> Fintech | None:
+        async with get_session() as session:
+            result = await session.execute(
+                select(Fintech).where(Fintech.api_key == api_key)
+            )
+            fintech = result.scalar_one_or_none()
+            if not fintech:
+                return None
+            for key, value in data.items():
+                setattr(fintech, key, value)
+            await session.commit()
+            await session.refresh(fintech)
+            return fintech
+
+    async def delete_fintech(self, api_key: str) -> bool:
+        async with get_session() as session:
+            result = await session.execute(
+                select(Fintech).where(Fintech.api_key == api_key)
+            )
+            fintech = result.scalar_one_or_none()
+            if not fintech:
+                return False
+            await session.delete(fintech)
+            await session.commit()
+            return True
