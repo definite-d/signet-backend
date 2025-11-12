@@ -38,6 +38,6 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    async_engine = _get_async_sessionmaker().bind
-    async with async_engine.begin() as conn:
+    async with get_session() as session:
+        conn = await session.connection()
         await conn.run_sync(Base.metadata.create_all)
