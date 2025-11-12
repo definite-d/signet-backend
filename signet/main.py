@@ -1,13 +1,13 @@
 from datetime import datetime
+from typing import Literal
 
-from jinja2 import Template
-from fastapi import Depends, FastAPI, UploadFile, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
-from .repo import FintechRepository
-from .crypt import sign, get_private_key
+from .crypt import get_private_key, sign
 from .qr import generate_qr_code
 from .render import render_with_positions
+from .repo import FintechRepository
 
 app = FastAPI()
 
@@ -28,6 +28,7 @@ class FintechGenerationRequest(BaseModel):
     amount: int
     time: datetime
     transaction_reference: str
+    format: Literal["svg", "png", "jpg", "webp"]
 
 
 @app.get("/")
@@ -85,7 +86,7 @@ async def get_fintech_generation(
     }
 
     # Generate barcode from payload
-    code = generate_qr_code(payload)
+    code = generate_qr_code(payload, format)
 
     # Export the barcode (SVG or PNG) with the logomark
     return code
