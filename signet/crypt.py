@@ -3,10 +3,9 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 from cryptography.hazmat.primitives import serialization
-from typing import Tuple, Optional
 
 
-def generate_keypair() -> Tuple[Ed25519PrivateKey, Ed25519PublicKey]:
+def generate_keypair() -> tuple[Ed25519PrivateKey, Ed25519PublicKey]:
     """
     Generate an Ed25519 private/public key pair.
     """
@@ -34,7 +33,7 @@ def verify(public_key: Ed25519PublicKey, message: bytes, signature: bytes) -> bo
 
 
 def private_key_to_pem(
-    private_key: Ed25519PrivateKey, password: Optional[bytes] = None
+    private_key: Ed25519PrivateKey, password: bytes | None = None
 ) -> bytes:
     """
     Serialize private key to PEM. If password provided (bytes), the PEM is encrypted.
@@ -62,7 +61,7 @@ def public_key_to_pem(public_key: Ed25519PublicKey) -> bytes:
 
 
 def load_private_key_from_pem(
-    pem_data: bytes, password: Optional[bytes] = None
+    pem_data: bytes, password: bytes | None = None
 ) -> Ed25519PrivateKey:
     """
     Load a private key from PEM. Password should be bytes if the PEM is encrypted.
@@ -75,37 +74,3 @@ def load_public_key_from_pem(pem_data: bytes) -> Ed25519PublicKey:
     Load a public key from PEM.
     """
     return serialization.load_pem_public_key(pem_data)
-
-
-# Example usage (run as script or import functions)
-if __name__ == "__main__":
-    msg = b"bootstrap asymmetric signature test"
-
-    # generate
-    priv, pub = generate_keypair()
-
-    # sign
-    sig = sign(priv, msg)
-    print("Signature length:", len(sig))
-
-    # verify
-    ok = verify(pub, msg, sig)
-    print("Verification passed:", ok)
-
-    # serialize
-    priv_pem = private_key_to_pem(priv, password=b"strong-password")  # or None
-    pub_pem = public_key_to_pem(pub)
-
-    # write to disk
-    with open("ed25519_priv.pem", "wb") as f:
-        f.write(priv_pem)
-    with open("ed25519_pub.pem", "wb") as f:
-        f.write(pub_pem)
-
-    # load back
-    loaded_priv = load_private_key_from_pem(priv_pem, password=b"strong-password")
-    loaded_pub = load_public_key_from_pem(pub_pem)
-
-    # sanity verify loaded keys
-    assert verify(loaded_pub, msg, sign(loaded_priv, msg))
-    print("Round-trip PEM load OK")
