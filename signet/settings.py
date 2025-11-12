@@ -7,4 +7,10 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    PRIVATE_KEY_PEM: Annotated[Path]
+    PRIVATE_KEY_PEM: Annotated[Path, str]
+    PUBLIC_KEY_PEM: Annotated[Path, str]
+    
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
