@@ -82,3 +82,9 @@ def load_public_key_from_pem(pem_data: bytes) -> Ed25519PublicKey:
 def get_private_key():
     with settings.PRIVATE_KEY_PEM.open("rb") as f:
         return load_private_key_from_pem(f.read())
+
+
+@lru_cache(1)
+def get_public_key():
+    with settings.PUBLIC_KEY_PEM.open("rb") as f:
+        return load_public_key_from_pem(f.read())
