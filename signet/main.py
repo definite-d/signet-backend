@@ -1,54 +1,16 @@
-from datetime import datetime
-from typing import Literal, Annotated
-
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from fastapi_standalone_docs import StandaloneDocs
-from pydantic import BaseModel, Field
-from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
+from base64 import b64encode
 
-from .db import init_db
-from .crypt import get_private_key, sign
-from .qr import generate_qr_code
-from .render import render_with_positions
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+
 from .repo import FintechRepository
-from .template_gen import generate_template
-from .settings import settings
+from .models import FintechGenerationRequest
+from .crypt import get_private_key, sign
 
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    StandaloneDocs(_app)
-    await init_db()
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-class FintechOnboardingRequest(BaseModel):
-    name: str
-    email: str
-    file: UploadFile
-
-
-class FintechGenerationRequest(BaseModel):
-    api_key: Annotated[
-        str,
-        Field(
-            pattern=rf"sgnt-fak-[a-zA-Z0-9]{{{settings.API_KEY_LENGTH * 2}}}",
-            title="API key",
-        ),
-    ]
-    sender_account: int
-    sender_bank: str
-    receiver_account: int
-    receiver_bank: str
-    receiver_name: str
-    amount: Annotated[float, Field(..., gt=0)]
-    time: datetime
-    transaction_reference: str
-    format: Literal["svg", "png", "jpg", "webp"]
+app = FastAPI()
 
 
 @app.get("/")
@@ -56,38 +18,36 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.post("/fintech/onboarding")
-async def fintech_onboarding(
-    data: FintechOnboardingRequest, repo: FintechRepository = Depends()
-):
-    # Take the receipt and run it through an OCR model to get the text.
-    # Then through an ML model to turn that into the template.
-    try:
-        template = generate_template(await data.file.read())
-    except EnvironmentError:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI services unreachable. Please try again later.",
-        )
-    except ValueError:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="Could not parse receipt. Please try again.",
-        )
+def signet_encode(data: bytes):
+    encoded_data = b64encode(data)
+    return encoded_data
+    
 
-    # Take the data and create a new fintech entry in the DB
-    fintech = await repo.create_fintech(
-        {
-            "name": data.name,
-            "email": data.email,
-            "template": "TODO: Generate a template from the receipt",
-        }
+def signet_encrypt(
+    data: bytes, key_size: int = 2048, hash_algorithm: hashes.HashAlgorithm = hashes.SHA256()
+) -> bytes:
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
     )
-    return {"name": data.name, "email": data.email, "file": data.file}
+    encrypted_data = private_key.sign(
+        data,
+        padding.PSS(
+            mgf=padding.MGF1(algorithm=hash_algorithm),
+            salt=b"",
+        ),
+    )
+        data,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hash_algorithm),
+            algorithm=hash_algorithm,
+            label=None,
+        ),
+    )
+    return encrypted_data
 
-
-@app.post("/fintech/generation")
-async def get_fintech_generation(
+@app.post("/fintech/transaction/new")
+async def sign_new_transaction_with_signet(
     data: FintechGenerationRequest, repo: FintechRepository = Depends()
 ):
     # Identify the fintech we're dealing with
@@ -98,38 +58,29 @@ async def get_fintech_generation(
         )
     # TODO: Ensure the fintech has the right permissions
 
-    # Render and record variable positions
-    rendered_text, positions = render_with_positions(
-        fintech.template,
-        sender_account=data.sender_account,
-        sender_bank=data.sender_bank,
-        receiver_account=data.receiver_account,
-        receiver_bank=data.receiver_bank,
-        receiver_name=data.receiver_name,
-        amount=data.amount,
-        time=data.time,
-        transaction_reference=data.transaction_reference,
-    )
-
-    expected_ocr_text = rendered_text.encode()
+    encoded_data = signet_encode(data.model_dump())
 
     # Sign the filled-in template text
-    signature = sign(get_private_key(), expected_ocr_text)
+    signature = sign(get_private_key(), encoded_data).hex()
 
-    # Identify key indices for the fintech
-    key_indices = {
-        "receiver_bank": positions.get("receiver_bank"),
-        "receiver_account": positions.get("receiver_account"),
-    }
-
-    # Append indices to signature payload
-    payload = {
-        "signature": signature,
-        "indices": key_indices,
-    }
+    encrypted = signet_encrypt(encoded_data + signature)
 
     # Generate barcode from payload
-    code = generate_qr_code(payload, format)
+    code: bytes = generate_qr_code(str(payload), data.format)
 
-    # Export the barcode (SVG or PNG) with the logomark
-    return code
+    # Export the barcode (SVG or raster)
+    return StreamingResponse(
+        code,
+        media_type=f"image/{data.format}{'+xml' if data.format == 'svg' else ''}",
+    )
+
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
