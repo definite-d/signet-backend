@@ -1,4 +1,5 @@
 import re
+
 from jinja2 import Template
 
 ZERO_WIDTH_START = "\u200b"  # Zero-width space
