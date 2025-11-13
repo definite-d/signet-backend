@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Literal, Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from fastapi_standalone_docs import StandaloneDocs
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
@@ -11,6 +12,8 @@ from .crypt import get_private_key, sign
 from .qr import generate_qr_code
 from .render import render_with_positions
 from .repo import FintechRepository
+from .template_gen import generate_template
+from .settings import settings
 
 
 @asynccontextmanager
@@ -57,8 +60,29 @@ async def root():
 async def fintech_onboarding(
     data: FintechOnboardingRequest, repo: FintechRepository = Depends()
 ):
+    # Take the receipt and run it through an OCR model to get the text.
+    # Then through an ML model to turn that into the template.
+    try:
+        template = generate_template(await data.file.read())
+    except EnvironmentError:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI services unreachable. Please try again later.",
+        )
+    except ValueError:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Could not parse receipt. Please try again.",
+        )
+
     # Take the data and create a new fintech entry in the DB
-    # Take the receipt and run it through an OCR model to get the text. Then through an ML model to turn that into the template.
+    fintech = await repo.create_fintech(
+        {
+            "name": data.name,
+            "email": data.email,
+            "template": "TODO: Generate a template from the receipt",
+        }
+    )
     return {"name": data.name, "email": data.email, "file": data.file}
 
 
