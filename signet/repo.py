@@ -9,7 +9,7 @@ from .settings import settings
 class FintechRepository:
     @staticmethod
     def _create_api_key():
-        return f"sgnt_{token_hex(settings.API_KEY_LENGTH)}"
+        return f"sgnt-fak-{token_hex(settings.API_KEY_LENGTH)}"
 
     async def get_fintech(self, api_key: str) -> Fintech | None:
         async with get_session() as session:
