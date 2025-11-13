@@ -28,7 +28,10 @@ def image_from_file(file_path) -> Image.Image:
     else:
         return Image.open(file_path).convert("RGB")
 
-def image_from_data(data: bytes, format: Literal["pdf", "webp", "jpg", "png"]) -> Image.Image:
+
+def image_from_data(
+    data: bytes, format: Literal["pdf", "webp", "jpg", "png"]
+) -> Image.Image:
     stream = BytesIO(data)
     if format == "pdf":
         pages = convert_from_path(stream, dpi=200, fmt="png")
@@ -89,7 +92,6 @@ Input text:
 Output the text with Jinja2 placeholders for dynamic values:
 
 - {{{{ sender_name  }}}}
-- {{{{ sender_account  }}}}
 - {{{{ sender_bank  }}}}
 - {{{{ receiver_name  }}}}
 - {{{{ receiver_account  }}}}
