@@ -36,7 +36,7 @@ class FintechGenerationRequest(BaseModel):
     api_key: Annotated[
         str,
         Field(
-            pattern=rf"sgnt-fak-[a-zA-Z0-9]{{{settings.API_KEY_LENGTH}}}",
+            pattern=rf"sgnt-fak-[a-zA-Z0-9]{{{settings.API_KEY_LENGTH * 2}}}",
             title="API key",
         ),
     ]
