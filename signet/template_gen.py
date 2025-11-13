@@ -2,6 +2,8 @@ from pathlib import Path
 from pdf2image import convert_from_path
 from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
+from io import BytesIO
+from typing import Literal
 import openai
 
 from .settings import settings
@@ -25,6 +27,15 @@ def image_from_file(file_path) -> Image.Image:
         return pages[0]
     else:
         return Image.open(file_path).convert("RGB")
+
+def image_from_data(data: bytes, format: Literal["pdf", "webp", "jpg", "png"]) -> Image.Image:
+    stream = BytesIO(data)
+    if format == "pdf":
+        pages = convert_from_path(stream, dpi=200, fmt="png")
+        if not pages:
+            raise ValueError("PDF conversion failed or file is empty.")
+        return pages[0]
+    return Image.open(stream).convert("RGB")
 
 
 # image preprocessing
@@ -60,7 +71,7 @@ def ocr_extract_text(file_path: str) -> str:
 
 
 # generate template
-def generate_template(file_path: str) -> str:
+def generate_template(data: bytes) -> str:
     """
     Extracts transaction details from a receipt or bank document.
 
