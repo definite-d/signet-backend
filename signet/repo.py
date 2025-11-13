@@ -1,6 +1,7 @@
+from secrets import token_hex
+
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import NoResultFound
-from secrets import token_hex
 
 from .db import Fintech, get_session
 from .settings import settings
