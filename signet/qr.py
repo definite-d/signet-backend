@@ -20,4 +20,6 @@ def generate_qr_code(
     else:
         im: Image = render_image(qr, ratio=1)
         im.save(qr_img, format=format)
+
+    qr_img.seek(0)
     return qr_img
