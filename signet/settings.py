@@ -9,9 +9,17 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    PRIVATE_KEY_PEM: Annotated[Path, str]
-    PUBLIC_KEY_PEM: Annotated[Path, str]
+
+    # Keys
+    RSA_PRIVATE_KEY_PEM: Annotated[Path, str]
+    RSA_PUBLIC_KEY_PEM: Annotated[Path, str]
+    ED25519_PRIVATE_KEY_PEM: Annotated[Path, str]
+    ED25519_PUBLIC_KEY_PEM: Annotated[Path, str]
+
+    # Variables
     API_KEY_LENGTH: Annotated[int, str] = 24
+
+    # External
     OPENAI_API_KEY: Annotated[SecretStr, str]
 
     class Config:
