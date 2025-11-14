@@ -41,7 +41,7 @@ async def new_seal(data: FintechGenerationRequest, repo: FintechRepository = Dep
     payload = pack_seal(data.transaction_data)
 
     # Generate barcode from payload
-    code: bytes = generate_qr_code(str(payload), data.format, data.pdf417_columns)
+    code: bytes = generate_qr_code(payload, data.format, data.pdf417_columns)
 
     # Export the barcode (SVG or raster)
     return StreamingResponse(
