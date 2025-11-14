@@ -1,160 +1,186 @@
 """
-Minimal-size secure pack/unpack for Seal model.
+Compact serialization + Ed25519 signature + zlib compression.
+No encryption. Returns raw binary bytes.
+Optimized for minimum payload size (QR code compatibility).
 
-- Uses canonical CBOR for smallest deterministic serialization.
-- Signs the serialized Seal with Ed25519.
-- Bundles {msg, sig} as a CBOR envelope, zlib-compresses it.
-- Encrypts with AES-GCM (random 256-bit key), wraps AES key with RSA-OAEP.
-- Final container is CBOR'd and Base85-encoded for safe transport/storage.
+Changes:
+1. 'amount' (float) is replaced by 'x' (integer kobos/smallest unit).
+2. All field keys are minimized (a, t, r, s, n, k, d, o, l).
+3. The inner envelope is a CBOR array [msg, sig] instead of a map {"m": msg, "s": sig}.
 """
 
-import os
+import math
 import zlib
-import base64
+from datetime import datetime, timezone
 from typing import Any
 
 import cbor2
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+from pydantic import BaseModel, Field
 
 from .crypt import (
-    sign_message,
-    verify_signature,
     get_ed25519_private_key,
     get_ed25519_public_key,
-    get_rsa_public_key,
-    get_rsa_private_key,
+    sign_message,
+    verify_signature,
 )
-from .models import Seal  # adjust import path as needed
+from .models import Seal
 
 
-# -----------------------
-# Serialization helpers
-# -----------------------
-def serialize_seal_cbor(seal: Seal) -> bytes:
-    """
-    Canonical CBOR serialization of Seal (uses aliases).
-    Deterministic and compact.
-    """
-    data = seal.model_dump(by_alias=True)
-    # cbor2 canonical=True gives deterministic map ordering and minimal encoding
-    return cbor2.dumps(data, canonical=True)
+# ----------------------------
+# Compact model (MAXIMAL minimal keys & type optimization)
+# ----------------------------
+class CSeal(BaseModel):
+    # 'x' (amount): Use kobo/smallest unit as integer instead of float. Saves ~4-6 bytes.
+    x: int = Field(gt=0)
+    t: int  # timestamp (unix seconds)
+    r: str  # transaction_reference
+    s: str = Field(min_length=10, max_length=10)  # sender_account_number
+    n: str  # sender_name
+    k: str = Field(min_length=6)  # sender_bank_code
+    d: str = Field(min_length=10, max_length=10)  # receiver_account_number
+    o: str  # receiver_name
+    l: str = Field(min_length=6)  # receiver_bank_code
 
 
-def _cbor_pack(obj: Any) -> bytes:
-    """Canonical CBOR dump for arbitrary object (bytes fields preserved)."""
+# ----------------------------
+# Helpers
+# ----------------------------
+def _cbor(obj: Any) -> bytes:
+    """Canonical CBOR serialization."""
     return cbor2.dumps(obj, canonical=True)
 
 
-def _cbor_unpack(blob: bytes) -> Any:
-    return cbor2.loads(blob)
+def _uncbor(b: bytes) -> Any:
+    """CBOR deserialization."""
+    return cbor2.loads(b)
 
 
-# -----------------------
-# Main pack / unpack
-# -----------------------
-def pack_seal_minimal(seal: Seal) -> bytes:
+def seal_to_cseal(seal: Seal) -> CSeal:
+    """Converts the verbose Seal model to the compact CSeal model."""
+    # Amount conversion: float -> int (multiplied by 100).
+    # Using math.floor for predictable conversion or round if desired.
+    # round() is generally safer for money:
+    amount_in_smallest_unit = int(round(seal.amount * 100))
+
+    return CSeal(
+        x=amount_in_smallest_unit,
+        t=int(seal.timestamp.timestamp()),
+        r=seal.transaction_reference,
+        s=seal.sender_account_number,
+        n=seal.sender_name,
+        k=seal.sender_bank_code,
+        d=seal.receiver_account_number,
+        o=seal.receiver_name,
+        l=seal.receiver_bank_code,
+    )
+
+
+def cseal_to_seal(c: CSeal) -> Seal:
+    """Converts the compact CSeal back to the verbose Seal model."""
+    # Amount conversion: int -> float (divided by 100)
+    amount = c.x / 100.0
+
+    return Seal(
+        amount=amount,
+        timestamp=datetime.fromtimestamp(c.t, tz=timezone.utc),  # Add timezone back
+        transaction_reference=c.r,
+        sender_account_number=c.s,
+        sender_name=c.n,
+        sender_bank_code=c.k,
+        receiver_account_number=c.d,
+        receiver_name=c.o,
+        receiver_bank_code=c.l,
+    )
+
+
+# ----------------------------
+# Pack (optimized) -> bytes
+# ----------------------------
+def pack_seal(seal: Seal) -> bytes:
     """
-    Pack a Seal into a compact, signed, encrypted, encoded blob (bytes).
-
-    Returns Base85-encoded bytes (ASCII).
+    Serialize Seal -> CBOR (compact keys/types) -> sign -> envelope CBOR array -> zlib.compress(level=9)
+    Returns raw bytes optimized for size.
     """
-    # 1. Serialize (CBOR canonical)
-    msg = serialize_seal_cbor(seal)  # bytes
+    # 1. Compact representation -> CBOR (msg)
+    cseal = seal_to_cseal(seal)
+    # Ensure canonical CBOR for consistent signing
+    msg = _cbor(cseal.model_dump())
 
-    # 2. Sign (Ed25519)
+    # 2. Sign message
     sig = sign_message(get_ed25519_private_key(), msg)  # 64 bytes
 
-    # 3. Build inner envelope (raw bytes allowed)
-    inner_envelope = {"v": 1, "msg": msg, "sig": sig}
-    inner_bytes = _cbor_pack(inner_envelope)
+    # 3. Minimal inner envelope: CBOR array [msg, sig]. Saves space over a map.
+    inner = [msg, sig]
+    inner_bytes = _cbor(inner)
 
-    # 4. Compress (zlib) — useful before encryption for size
-    compressed = zlib.compress(inner_bytes)
-
-    # 5. Hybrid encrypt: AES-GCM + RSA-OAEP-wrapped key
-    aes_key = AESGCM.generate_key(bit_length=256)
-    aesgcm = AESGCM(aes_key)
-    nonce = os.urandom(12)  # recommended 12 bytes for AES-GCM
-    ciphertext = aesgcm.encrypt(nonce, compressed, None)  # auth tag appended inside
-
-    # 6. Wrap AES key with RSA public key
-    rsa_pub = get_rsa_public_key()
-    wrapped_key = rsa_pub.encrypt(
-        aes_key,
-        asym_padding.OAEP(
-            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None,
-        ),
-    )
-
-    # 7. Build outer container and CBOR-encode (canonical)
-    outer = {
-        "v": 1,
-        "wrap": wrapped_key,  # bytes
-        "nonce": nonce,  # bytes
-        "ct": ciphertext,  # bytes
-    }
-    outer_bytes = _cbor_pack(outer)
-
-    # 8. Base85 encode (compact ASCII-safe)
-    return base64.b85encode(outer_bytes)
+    # 4. Compress aggressively
+    return zlib.compress(inner_bytes, level=9)
 
 
-def unpack_seal_minimal(encoded_blob: bytes) -> Seal:
+# ----------------------------
+# Unpack (optimized) <- bytes
+# ----------------------------
+def unpack_seal(blob: bytes) -> Seal:
     """
-    Decode and verify a blob produced by pack_seal_minimal.
-    Returns a validated Seal instance or raises on failure.
+    Accepts raw bytes produced by pack_seal, verifies signature,
+    and returns a validated Seal instance.
     """
-    # 1. Base85 decode
-    outer_bytes = base64.b85decode(encoded_blob)
-
-    # 2. Parse outer CBOR container
-    outer = _cbor_unpack(outer_bytes)
-    if outer.get("v") != 1:
-        raise ValueError("unsupported outer version")
-
-    wrapped_key = outer["wrap"]
-    nonce = outer["nonce"]
-    ciphertext = outer["ct"]
-
-    # 3. Unwrap AES key with RSA private key
-    rsa_priv = get_rsa_private_key()
-    aes_key = rsa_priv.decrypt(
-        wrapped_key,
-        asym_padding.OAEP(
-            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None,
-        ),
-    )
-
-    # 4. AES-GCM decrypt
-    aesgcm = AESGCM(aes_key)
+    # 1. Decompress
     try:
-        compressed = aesgcm.decrypt(nonce, ciphertext, None)
+        inner_bytes = zlib.decompress(blob)
     except Exception as e:
-        raise ValueError("decryption/authentication failed") from e
+        raise ValueError("decompression failed") from e
 
-    # 5. Decompress
-    inner_bytes = zlib.decompress(compressed)
+    # 2. Parse envelope (expects array [msg, sig])
+    inner = _uncbor(inner_bytes)
+    if not (isinstance(inner, list) and len(inner) == 2):
+        raise ValueError("malformed envelope")
 
-    # 6. Parse inner envelope
-    inner = _cbor_unpack(inner_bytes)
-    if inner.get("v") != 1:
-        raise ValueError("unsupported inner version")
+    msg, sig = inner
 
-    msg = inner["msg"]  # serialized Seal CBOR bytes
-    sig = inner["sig"]
-
-    # 7. Verify signature
+    # 3. Verify signature
     if not verify_signature(get_ed25519_public_key(), msg, sig):
         raise ValueError("signature verification failed")
 
-    # 8. Deserialize Seal (CBOR -> dict -> model_validate)
-    obj = cbor2.loads(
-        msg
-    )  # gives dict with native types (datetime preserved if present)
-    return Seal.model_validate(obj)
+    # 4. Decode message -> CSeal
+    cseal_dict = _uncbor(msg)
+    # The keys will be the short keys (x, t, r, s, n, k, d, o, l)
+    cseal = CSeal.model_validate(cseal_dict)
+
+    # 5. Convert back to Seal and return
+    return cseal_to_seal(cseal)
+
+
+# ----------------------------
+# Example usage
+# ----------------------------
+if __name__ == "__main__":
+    from datetime import datetime as dt
+
+    s = Seal(
+        amount=10.51,  # Changed to 2 decimal places to test int conversion
+        timestamp=dt.now(timezone.utc),
+        transaction_reference="ref1234567890",
+        sender_account_number="0123456789",
+        sender_name="Alice B. Johnson",
+        sender_bank_code="123456",
+        receiver_account_number="9876543210",
+        receiver_name="Bob A. Smith",
+        receiver_bank_code="654321",
+    )
+
+    packed = pack_seal(s)
+    restored = unpack_seal(packed)
+
+    # Asserting restored amount works with float precision issues (should be close)
+    assert math.isclose(restored.amount, s.amount, rel_tol=1e-9)
+    assert restored.transaction_reference == s.transaction_reference
+
+    # Check conversion to int kobo was correct
+    expected_kobos = int(round(s.amount * 100))
+    print(f"Original amount: {s.amount}, Stored as kobos: {expected_kobos}")
+    print(f"Restored amount: {restored.amount}")
+
+    print("\n--- Payload Size ---")
+    print("Round-trip OK.")
+    print(f"Optimized Bytes (zlib L9): {len(packed)} bytes")
