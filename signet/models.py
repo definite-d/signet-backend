@@ -7,26 +7,6 @@ from .settings import settings
 
 
 # =========================
-# Request Models
-# =========================
-class FintechGenerationRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    api_key: Annotated[
-        str,
-        Field(
-            ...,
-            alias="apiKey",
-            pattern=rf"sgnt-fak-[a-zA-Z0-9]{{{settings.API_KEY_LENGTH * 2}}}",
-            title="API key",
-        ),
-    ]
-    format: Annotated[Literal["svg", "png", "jpeg", "webp"], Field()]
-    image_width: Annotated[int, Field(..., alias="imageWidth", gt=0)]
-    transaction_data: Annotated["Seal", Field(alias="transactionData")]
-
-
-# =========================
 # Other Models
 # =========================
 class Seal(BaseModel):
@@ -50,11 +30,31 @@ class Seal(BaseModel):
 
     @field_validator("timestamp")
     @classmethod
-    def check_timestamp_not_past(cls, ts) -> dict:
-        print(ts < datetime.now())
-        if ts and ts < datetime.now():
+    def check_timestamp_not_past(cls, ts: datetime) -> datetime:
+        if ts and ts.astimezone(settings.TZ) < datetime.now(settings.TZ):
             raise ValueError("timestamp cannot be in the past")
         return ts
+
+
+# =========================
+# Request Models
+# =========================
+class FintechGenerationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    api_key: Annotated[
+        str,
+        Field(
+            ...,
+            alias="apiKey",
+            pattern=rf"sgnt-fak-[a-zA-Z0-9]{{{settings.API_KEY_LENGTH * 2}}}",
+            title="API key",
+        ),
+    ]
+    format: Annotated[Literal["svg", "png", "jpeg", "webp"], Field()]
+    image_width: Annotated[int, Field(..., alias="imageWidth", gt=0)]
+    transaction_data: Annotated["Seal", Field(alias="transactionData")]
+    pdf417_columns: Annotated[int, Field(6, alias="pdf417Columns", gt=0)]
 
 
 if __name__ == "__main__":
