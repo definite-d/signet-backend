@@ -5,11 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi_standalone_docs import StandaloneDocs
 
-from .crypt import secure_pack
 from .db import init_db
 from .models import FintechGenerationRequest
 from .qr import generate_qr_code
 from .repo import FintechRepository
+from .serialization import pack_seal
 
 
 @asynccontextmanager
@@ -38,10 +38,10 @@ async def new_seal(data: FintechGenerationRequest, repo: FintechRepository = Dep
     # TODO: Ensure the fintech has the right permissions
 
     # Securely craft the payload
-    payload = secure_pack(data.model_dump())
+    payload = pack_seal(data.transaction_data)
 
     # Generate barcode from payload
-    code: bytes = generate_qr_code(str(payload), data.format)
+    code: bytes = generate_qr_code(str(payload), data.format, data.pdf417_columns)
 
     # Export the barcode (SVG or raster)
     return StreamingResponse(
