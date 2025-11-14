@@ -9,13 +9,13 @@ from pydantic import validate_call
 
 @validate_call()
 def generate_qr_code(
-    data: str, format: Literal["png", "jpg", "webp", "svg"], columns=8
+    data: bytes, format: Literal["png", "jpg", "webp", "svg"], columns=8
 ) -> BytesIO:
     """
     Generates a QR code from the given data.
 
     Args:
-        data (str): The data to encode in the QR code.
+        data (bytes): The data to encode in the QR code.
         format (Literal["png", "jpg", "webp", "svg"]): The format of the QR code image.
         columns (int): The number of columns in the QR code.
 
