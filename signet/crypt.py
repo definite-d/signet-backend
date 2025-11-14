@@ -5,6 +5,7 @@ import zlib
 import base64
 from cryptography.hazmat.primitives.asymmetric import ed25519, rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from pydantic import BaseModel, validate_call
 
 from .settings import settings
 
@@ -184,12 +185,16 @@ def get_ed25519_public_key() -> ed25519.Ed25519PublicKey:
 # =========================
 
 
-def secure_pack(data: dict) -> bytes:
+@validate_call
+def secure_pack(data: dict | BaseModel) -> bytes:
     """
     Sign, encrypt, and encode a dictionary payload.
     """
     # 1. Serialize
-    message = json.dumps(data, separators=(",", ":")).encode()
+    if isinstance(data, dict):
+        message = json.dumps(data, separators=(",", ":")).encode()
+    else:
+        message = data.model_dump_json(by_alias=True).encode()
 
     # 2. Sign
     sig = sign_message(get_ed25519_private_key(), message)
