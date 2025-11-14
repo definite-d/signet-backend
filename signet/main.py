@@ -1,13 +1,25 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
-from .repo import FintechRepository
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi_standalone_docs import StandaloneDocs
+
+from .crypt import secure_pack
+from .db import init_db
 from .models import FintechGenerationRequest
 from .qr import generate_qr_code
-from .crypt import secure_pack
+from .repo import FintechRepository
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    StandaloneDocs(_app)
+    await init_db()
+    yield
+
+
+app = FastAPI(title="Signet API", lifespan=lifespan)
 
 
 @app.get("/")
@@ -16,9 +28,7 @@ async def root():
 
 
 @app.post("/fintech/transaction/new")
-async def sign_new_transaction_with_signet(
-    data: FintechGenerationRequest, repo: FintechRepository = Depends()
-):
+async def new_seal(data: FintechGenerationRequest, repo: FintechRepository = Depends()):
     # Identify the fintech we're dealing with
     fintech = await repo.get_fintech(data.api_key)
     if not fintech:
