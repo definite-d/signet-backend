@@ -9,7 +9,6 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-
     # Keys
     RSA_PRIVATE_KEY_PEM: Annotated[Path, str]
     RSA_PUBLIC_KEY_PEM: Annotated[Path, str]
