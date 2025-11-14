@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi_standalone_docs import StandaloneDocs
@@ -53,6 +53,11 @@ async def new_seal(data: FintechGenerationRequest, repo: FintechRepository = Dep
 # @app.post("/report")
 # async def get_reports(data: list[ReportRequest], repo: ReportRepository= Depends()):
 #     pass
+
+
+@app.post("/verify")
+async def online_verification(data: UploadFile):
+    return
 
 
 origins = ["*"]
