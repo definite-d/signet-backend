@@ -1,11 +1,25 @@
 import base64
 import json
+import os
 import zlib
 from functools import lru_cache
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pydantic import BaseModel, validate_call
+from .models import Seal
+
+import os
+import msgpack
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from base64 import b64encode, b64decode
+
+import json, zlib, base64
+
+from pydantic import BaseModel, validate_call
+
+import datetime
 
 from .settings import settings
 
@@ -177,64 +191,6 @@ def get_ed25519_private_key() -> ed25519.Ed25519PrivateKey:
 def get_ed25519_public_key() -> ed25519.Ed25519PublicKey:
     with settings.ED25519_PUBLIC_KEY_PEM.open("rb") as f:
         return load_public_key_from_pem(f.read())
-
-
-# =========================
-# Secure Serialization
-# =========================
-
-
-@validate_call
-def secure_pack(data: dict | BaseModel) -> bytes:
-    """
-    Sign, encrypt, and encode a dictionary payload.
-    """
-    # 1. Serialize
-    if isinstance(data, dict):
-        message = json.dumps(data, separators=(",", ":")).encode()
-    else:
-        message = data.model_dump_json(by_alias=True).encode()
-
-    # 2. Sign
-    sig = sign_message(get_ed25519_private_key(), message)
-
-    # 3. Bundle message + signature
-    envelope = json.dumps(
-        {
-            "msg": base64.b85encode(message).decode(),
-            "sig": base64.b85encode(sig).decode(),
-        },
-        separators=(",", ":"),
-    ).encode()
-
-    # 4. Encrypt
-    ciphertext = rsa_encrypt(get_rsa_public_key(), envelope)
-
-    # 5. Compress + encode
-    return base64.b85encode(zlib.compress(ciphertext))
-
-
-def secure_unpack(encoded: bytes) -> dict:
-    """
-    Decode, decrypt, and verify a dictionary payload.
-    """
-    # 1. Decode + decompress
-    ciphertext = zlib.decompress(base64.b85decode(encoded))
-
-    # 2. Decrypt
-    envelope = rsa_decrypt(get_rsa_private_key(), ciphertext)
-
-    # 3. Parse envelope
-    obj = json.loads(envelope)
-    message = base64.b85decode(obj["msg"])
-    sig = base64.b85decode(obj["sig"])
-
-    # 4. Verify signature
-    if not verify_signature(get_ed25519_public_key(), message, sig):
-        raise ValueError("Signature verification failed")
-
-    # 5. Deserialize original dict
-    return json.loads(message)
 
 
 # =========================
