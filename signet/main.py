@@ -50,6 +50,11 @@ async def new_seal(data: FintechGenerationRequest, repo: FintechRepository = Dep
     )
 
 
+# @app.post("/report")
+# async def get_reports(data: list[ReportRequest], repo: ReportRepository= Depends()):
+#     pass
+
+
 origins = ["*"]
 
 app.add_middleware(
