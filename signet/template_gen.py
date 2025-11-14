@@ -1,10 +1,11 @@
+from io import BytesIO
 from pathlib import Path
+from typing import Literal
+
+import openai
+import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image, ImageEnhance, ImageFilter
-import pytesseract
-from io import BytesIO
-from typing import Literal
-import openai
 
 from .settings import settings
 
@@ -74,7 +75,7 @@ def ocr_extract_text(file_path: str) -> str:
 
 
 # generate template
-def generate_template(data: bytes) -> str:
+def generate_template(file_path: str) -> str:
     """
     Extracts transaction details from a receipt or bank document.
 
