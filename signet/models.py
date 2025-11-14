@@ -53,8 +53,15 @@ class FintechGenerationRequest(BaseModel):
     ]
     format: Annotated[Literal["svg", "png", "jpeg", "webp"], Field()]
     image_width: Annotated[int, Field(..., alias="imageWidth", gt=0)]
-    transaction_data: Annotated["Seal", Field(alias="transactionData")]
+    transaction_data: Annotated[Seal, Field(alias="transactionData")]
     pdf417_columns: Annotated[int, Field(6, alias="pdf417Columns", gt=0)]
+
+
+class ReportRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ocr_text: Annotated[str, Field(alias="ocrText")]
+    transaction_data: Annotated[Seal, Field(alias="transactionData")]
 
 
 if __name__ == "__main__":
