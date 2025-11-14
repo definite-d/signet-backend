@@ -1,3 +1,4 @@
+from datetime import timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+    @property
+    def TZ(self):
+        return timezone(timedelta(hours=1))  # Nigerian Time
 
 
 settings = Settings()  # ty:ignore[missing-argument], noqa
