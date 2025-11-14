@@ -9,7 +9,7 @@ from .db import init_db
 from .models import FintechGenerationRequest
 from .qr import generate_qr_code
 from .repo import FintechRepository
-from .serialization import pack_seal
+from .serialization import pack_seal, unpack_seal
 
 
 @asynccontextmanager
@@ -57,7 +57,7 @@ async def new_seal(data: FintechGenerationRequest, repo: FintechRepository = Dep
 
 @app.post("/verify")
 async def online_verification(data: UploadFile):
-    return
+    return unpack_seal(data.file.read())
 
 
 origins = ["*"]
