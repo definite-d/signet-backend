@@ -10,6 +10,8 @@ from .settings import settings
 # Request Models
 # =========================
 class FintechGenerationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     api_key: Annotated[
         str,
         Field(
@@ -21,7 +23,7 @@ class FintechGenerationRequest(BaseModel):
     ]
     format: Annotated[Literal["svg", "png", "jpeg", "webp"], Field()]
     image_width: Annotated[int, Field(..., alias="imageWidth", gt=0)]
-    transaction_data: "Seal"
+    transaction_data: Annotated["Seal", Field(alias="transactionData")]
 
 
 # =========================
@@ -49,6 +51,7 @@ class Seal(BaseModel):
     @field_validator("timestamp")
     @classmethod
     def check_timestamp_not_past(cls, ts) -> dict:
+        print(ts < datetime.now())
         if ts and ts < datetime.now():
             raise ValueError("timestamp cannot be in the past")
         return ts
@@ -59,7 +62,7 @@ if __name__ == "__main__":
     print(
         Seal(
             amount=3.23,
-            timestamp=datetime(2025, 11, 14, 12, 59, 0),
+            timestamp=datetime(2025, 11, 14, 1, 19, 0),
             transaction_reference="1234",
             sender_account_number="1921689292",
             sender_bank_code="233434",
